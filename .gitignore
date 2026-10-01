@@ -1,0 +1,23 @@
+# Environment files
+.env
+
+# VS Code
+.vscode/
+
+# IDE
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+
+# Windows files
+Thumbs.db
+
+# macOS files
+.DS_Store
+
+# Uploaded files
+uploads/
