@@ -535,7 +535,8 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
                 </a>
 
                 <a href="register.php" class="register-link">
-                    Get Started
+                    Account
+                    
                 </a>
 
             <?php endif; ?>

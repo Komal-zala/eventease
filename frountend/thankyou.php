@@ -1,23 +1,34 @@
 <?php
 
 require_once __DIR__ . "/../vendor/autoload.php";
-require_once __DIR__ . '/../config/database.php';
-
+require_once __DIR__ . "/../config/database.php";
 
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use chillerlan\QRCode\Output\QRGdImagePNG;
 
-// Get registration code
+
+/*
+|--------------------------------------------------------------------------
+| Get Registration Code
+|--------------------------------------------------------------------------
+*/
+
 $registrationCode = $_GET['code'] ?? '';
 
 if (empty($registrationCode)) {
     die("Invalid registration code.");
 }
 
-// Get registration details
+
+/*
+|--------------------------------------------------------------------------
+| Get Registration Details
+|--------------------------------------------------------------------------
+*/
+
 $stmt = $conn->prepare("
-    SELECT 
+    SELECT
         r.registration_code,
         r.qr_code,
         r.registered_at,
@@ -34,12 +45,45 @@ $stmt = $conn->prepare("
     LIMIT 1
 ");
 
-$stmt->execute([$registrationCode]);
-$registration = $stmt->fetch();
+if (!$stmt) {
+    die("Database prepare failed: " . $conn->error);
+}
+
+$stmt->bind_param("s", $registrationCode);
+
+if (!$stmt->execute()) {
+    die("Database execute failed: " . $stmt->error);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Result
+|--------------------------------------------------------------------------
+*/
+
+$result = $stmt->get_result();
+
+if (!$result) {
+    die("Unable to get registration details: " . $stmt->error);
+}
+
+$registration = $result->fetch_assoc();
+
+$result->free();
+$stmt->close();
+
+
+/*
+|--------------------------------------------------------------------------
+| Check Registration
+|--------------------------------------------------------------------------
+*/
 
 if (!$registration) {
     die("Registration not found.");
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -47,19 +91,27 @@ if (!$registration) {
 |--------------------------------------------------------------------------
 */
 
-$qrFolder = __DIR__ . "/qr/";
+$qrFolder = __DIR__ . "/../qr/";
 
 if (!is_dir($qrFolder)) {
-    mkdir($qrFolder, 0777, true);
+    if (!mkdir($qrFolder, 0777, true)) {
+        die("Unable to create QR folder.");
+    }
 }
 
 $qrFileName = $registrationCode . ".png";
 $qrFilePath = $qrFolder . $qrFileName;
 
-// Generate QR only if it doesn't already exist
+
+/*
+|--------------------------------------------------------------------------
+| Generate QR only if it doesn't already exist
+|--------------------------------------------------------------------------
+*/
+
 if (!file_exists($qrFilePath)) {
 
-    $options = new QROptions;
+    $options = new QROptions();
 
     // PNG output
     $options->outputInterface = QRGdImagePNG::class;
@@ -70,7 +122,7 @@ if (!file_exists($qrFilePath)) {
     // White background
     $options->imageTransparent = false;
 
-    // Save raw PNG instead of Base64
+    // Save as PNG file
     $options->outputBase64 = false;
 
     $qrCode = new QRCode($options);
@@ -81,9 +133,10 @@ if (!file_exists($qrFilePath)) {
     );
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Save QR filename in database
+| Save QR filename in Database
 |--------------------------------------------------------------------------
 */
 
@@ -95,17 +148,42 @@ if ($registration['qr_code'] !== $qrFileName) {
         WHERE registration_code = ?
     ");
 
-    $update->execute([
+    if (!$update) {
+        die("Failed to prepare QR update: " . $conn->error);
+    }
+
+    $update->bind_param(
+        "ss",
         $qrFileName,
         $registrationCode
-    ]);
+    );
+
+    if (!$update->execute()) {
+        die("Failed to save QR filename: " . $update->error);
+    }
+
+    $update->close();
 }
 
-// Browser URL for QR image
-$qrImageUrl = "qr/" . rawurlencode($qrFileName);
 
-// WhatsApp message
+/*
+|--------------------------------------------------------------------------
+| QR Image URL for Browser
+|--------------------------------------------------------------------------
+|
+| thankyou.php is inside:
+| frountend/
+|
+| QR is inside:
+| qr/
+|
+| Therefore:
+| ../qr/filename.png
+|
+|--------------------------------------------------------------------------
+*/
 
+$qrImageUrl = "../qr/" . rawurlencode($qrFileName);
 
 ?>
 
@@ -116,17 +194,15 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>EventEase - Registration Successful</title>
 
     <style>
 
-.ticket-btn {
-    background: #198754;
-    color: white;
-}
         * {
             box-sizing: border-box;
         }
@@ -221,13 +297,13 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
             font-weight: bold;
         }
 
-        .download-btn {
-            background: #0d6efd;
+        .ticket-btn {
+            background: #198754;
             color: white;
         }
 
-        .whatsapp-btn {
-            background: #25D366;
+        .download-btn {
+            background: #0d6efd;
             color: white;
         }
 
@@ -254,6 +330,9 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
         Thank you for registering for EventEase.
     </p>
 
+
+    <!-- REGISTRATION CODE -->
+
     <div class="registration-code">
 
         <strong>Your Registration Code</strong>
@@ -263,6 +342,7 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
         </div>
 
     </div>
+
 
     <!-- QR CODE -->
 
@@ -282,6 +362,7 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
         </p>
 
     </div>
+
 
     <!-- STUDENT DETAILS -->
 
@@ -319,124 +400,44 @@ $qrImageUrl = "qr/" . rawurlencode($qrFileName);
 
     </div>
 
+
     <!-- BUTTONS -->
-     <!-- BUTTONS -->
 
-<div class="buttons">
+    <div class="buttons">
 
-    <!-- View Digital Ticket -->
+        <!-- View Digital Ticket -->
 
-    <a
-        href="ticket.php?code=<?php echo urlencode($registrationCode); ?>"
-        class="btn ticket-btn"
-    >
-        🎟️ View Digital Ticket
-    </a>
-
-
-    <!-- Download QR -->
-
-    <a
-        href="<?php echo htmlspecialchars($qrImageUrl); ?>"
-        download="<?php echo htmlspecialchars($qrFileName); ?>"
-        class="btn download-btn"
-    >
-        ⬇ Download QR
-    </a>
+        <a
+            href="ticket.php?code=<?php echo urlencode($registrationCode); ?>"
+            class="btn ticket-btn"
+        >
+            🎟️ View Digital Ticket
+        </a>
 
 
-    <!-- Back -->
+        <!-- Download QR -->
 
-    <a
-        href="register.php"
-        class="btn back-btn"
-    >
-        ← New Registration
-    </a>
+        <a
+            href="<?php echo htmlspecialchars($qrImageUrl); ?>"
+            download="<?php echo htmlspecialchars($qrFileName); ?>"
+            class="btn download-btn"
+        >
+            ⬇ Download QR
+        </a>
+
+
+        <!-- New Registration -->
+
+        <a
+            href="register.php"
+            class="btn back-btn"
+        >
+            ← New Registration
+        </a>
+
+    </div>
 
 </div>
-
-   
-</div>
-
-
-<script>
-
-document
-    .getElementById("shareQR")
-    .addEventListener("click", async function () {
-
-        const qrImage = document.getElementById("qrImage");
-
-        try {
-
-            /*
-             * Download the QR image from our server
-             */
-            const response = await fetch(qrImage.src);
-
-            if (!response.ok) {
-                throw new Error("Could not load QR image.");
-            }
-
-            const blob = await response.blob();
-
-            /*
-             * Convert image into a file
-             */
-            const file = new File(
-                [blob],
-                "<?php echo htmlspecialchars($qrFileName); ?>",
-                {
-                    type: "image/png"
-                }
-            );
-
-            /*
-             * Check browser support
-             */
-            if (
-                navigator.canShare &&
-                navigator.canShare({
-                    files: [file]
-                })
-            ) {
-
-                await navigator.share({
-
-                    title: "EventEase QR Ticket",
-
-                    text:
-                        "My EventEase registration QR code.\n" +
-                        "Registration Code: <?php echo htmlspecialchars($registrationCode); ?>",
-
-                    files: [file]
-
-                });
-
-            } else {
-
-                alert(
-                    "Image sharing is not supported in this browser. " +
-                    "Please download the QR and share it manually on WhatsApp."
-                );
-
-            }
-
-        } catch (error) {
-
-            console.error(error);
-
-            alert(
-                "Unable to share the QR image. " +
-                "Please download the QR and share it manually."
-            );
-
-        }
-
-    });
-
-</script>
 
 </body>
 

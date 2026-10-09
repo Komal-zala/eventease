@@ -1,20 +1,21 @@
 <?php
 
-$host = "localhost";
-$dbname = "enent";
-$username = "root";
-$password = "";
+$servername = "localhost";
+$username   = "root";
+$password   = "";
+$dbname     = "eventease";
 
-try {
-    $conn = new PDO(
-        "mysql:host=$host;dbname=$dbname;charset=utf8mb4",
-        $username,
-        $password
-    );
+$conn = new mysqli(
+    $servername,
+    $username,
+    $password,
+    $dbname
+);
 
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
 }
+
+$conn->set_charset("utf8mb4");
+
+?>

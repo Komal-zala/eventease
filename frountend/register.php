@@ -76,7 +76,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $phone_number = trim($_POST["phone_number"] ?? "");
     $whatsapp_number = trim($_POST["whatsapp_number"] ?? "");
 
-
     // Basic validation
     if (
         empty($name) ||
@@ -105,96 +104,363 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         try {
 
+            // Start transaction so student + registration are saved together
+            $conn->begin_transaction();
+
             // Check duplicate enrollment number
             $check = $conn->prepare(
-                "SELECT id FROM students WHERE enrollment_number = ?"
+                "SELECT id FROM students WHERE enrollment_number = ? LIMIT 1"
             );
 
-            $check->execute([$enrollment_number]);
+            if (!$check) {
+                throw new Exception("Unable to prepare duplicate check.");
+            }
 
-            if ($check->fetch()) {
+            $check->bind_param("s", $enrollment_number);
+            $check->execute();
+            $check->store_result();
+
+            if ($check->num_rows > 0) {
+
+                $check->close();
+                $conn->rollback();
 
                 $message = "This enrollment number is already registered.";
                 $messageType = "error";
 
             } else {
 
+                $check->close();
+
                 // Insert student
                 $sql = "INSERT INTO students
-                        (
-                            name,
-                            department,
-                            program,
-                            semester,
-                            enrollment_number,
-                            phone_number,
-                            whatsapp_number
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    (
+                        name,
+                        department,
+                        program,
+                        semester,
+                        enrollment_number,
+                        phone_number,
+                        whatsapp_number
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)";
 
                 $stmt = $conn->prepare($sql);
 
-               $stmt->execute([
-    $name,
-    $department,
-    $program,
-    $semester,
-    $enrollment_number,
-    $phone_number,
-    $whatsapp_number
-]);
+                if (!$stmt) {
+                    throw new Exception("Unable to prepare student registration.");
+                }
 
-// Get newly created student ID
-$studentId = $conn->lastInsertId();
+                $stmt->bind_param(
+                    "sssssss",
+                    $name,
+                    $department,
+                    $program,
+                    $semester,
+                    $enrollment_number,
+                    $phone_number,
+                    $whatsapp_number
+                );
 
-// Create unique registration code
-$registrationCode = "EVT-" . date("Y") . "-" . strtoupper(
-    substr(bin2hex(random_bytes(5)), 0, 8)
-);
+                $stmt->execute();
+                $stmt->close();
 
-// Insert registration
-$registrationSql = "
-    INSERT INTO registrations
-    (
-        student_id,
-        registration_code
-    )
-    VALUES (?, ?)
-";
+                // Get newly created student ID
+                // MySQLi uses insert_id, NOT lastInsertId()
+                $studentId = $conn->insert_id;
 
-$registrationStmt = $conn->prepare($registrationSql);
+                // Create unique registration code
+                $registrationCode = "EVT-" . date("Y") . "-" . strtoupper(
+                    substr(bin2hex(random_bytes(5)), 0, 8)
+                );
 
-$registrationStmt->execute([
-    $studentId,
-    $registrationCode
-]);
+                // Insert registration
+                $registrationSql = "
+                    INSERT INTO registrations
+                    (
+                        student_id,
+                        event_id,
+                        registration_code
+                    )
+                    VALUES (?, ?,?)
+                ";
 
-// Redirect to thank-you page
-header(
-    "Location: thankyou.php?code=" .
-    urlencode($registrationCode)
-);
+                $registrationStmt = $conn->prepare($registrationSql);
 
-exit;
+                if (!$registrationStmt) {
+                    throw new Exception("Unable to prepare event registration.");
+                }
 
-                // Clear fields
-                $name = "";
-                $department = "";
-                $program = "";
-                $semester = "";
-                $enrollment_number = "";
-                $phone_number = "";
-                $whatsapp_number = "";
+                $registrationStmt->bind_param(
+                    "is",
+                    $studentId,
+                    $event_id,
+                    $registrationCode
+                );
+
+                $registrationStmt->execute();
+                $registrationStmt->close();
+
+                // Save both records
+                $conn->commit();
+
+                // Redirect to thank-you page
+                header(
+                    "Location: thankyou.php?code=" .
+                    urlencode($registrationCode)
+                );
+
+                exit;
             }
 
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
+
+            // Roll back if anything failed
+            try {
+                $conn->rollback();
+            } catch (Throwable $rollbackError) {
+                // Ignore rollback errors
+            }
 
             $message = "Something went wrong. Please try again.";
             $messageType = "error";
+
+            // For development only:
+            // Uncomment the next line if you need the exact database error.
+            // $message = $e->getMessage();
         }
     }
 }
 
+?>
+
+<?php
+require_once __DIR__ . '/../config/database.php';
+
+$message = "";
+$messageType = "";
+
+// Read event ID from the URL or submitted form.
+$eventId = filter_input(INPUT_GET, 'event_id', FILTER_VALIDATE_INT);
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $eventId = filter_input(INPUT_POST, 'event_id', FILTER_VALIDATE_INT);
+}
+
+$event = null;
+$eventError = "";
+
+// Verify the selected event.
+if (!$eventId || $eventId < 1) {
+    $eventError = "Please select a valid event first.";
+} else {
+    $eventStmt = $conn->prepare(
+        "SELECT id, title, event_date, price, registration_open,
+                registration_deadline, status
+         FROM events
+         WHERE id = ?
+         LIMIT 1"
+    );
+
+    if (!$eventStmt) {
+        $eventError = "Unable to load event details.";
+    } else {
+        $eventStmt->bind_param("i", $eventId);
+        $eventStmt->execute();
+        $eventResult = $eventStmt->get_result();
+        $event = $eventResult->fetch_assoc();
+        $eventStmt->close();
+
+        if (!$event) {
+            $eventError = "Event not found.";
+        } elseif (
+            (string)$event['registration_open'] !== '1' ||
+            $event['status'] !== 'published' ||
+            strtotime($event['event_date']) < strtotime(date('Y-m-d')) ||
+            (
+                !empty($event['registration_deadline']) &&
+                strtotime($event['registration_deadline']) < time()
+            )
+        ) {
+            $eventError = "Registration for this event is closed.";
+        }
+    }
+}
+
+// Keep these variables available for the form.
+$name = "";
+$department = "";
+$program = "";
+$semester = "";
+$enrollment_number = "";
+$phone_number = "";
+$whatsapp_number = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST" && $eventError === "") {
+    $name = trim($_POST["name"] ?? "");
+    $department = trim($_POST["department"] ?? "");
+    $program = trim($_POST["program"] ?? "");
+    $semester = trim($_POST["semester"] ?? "");
+    $enrollment_number = trim($_POST["enrollment_number"] ?? "");
+    $phone_number = trim($_POST["phone_number"] ?? "");
+    $whatsapp_number = trim($_POST["whatsapp_number"] ?? "");
+
+    if (
+        $name === "" || $department === "" || $program === "" ||
+        $semester === "" || $enrollment_number === "" ||
+        $phone_number === "" || $whatsapp_number === ""
+    ) {
+        $message = "Please fill all fields.";
+        $messageType = "error";
+    } elseif (
+        !isset($programs[$department]) ||
+        !in_array($program, $programs[$department], true)
+    ) {
+        $message = "Please select a valid department and program.";
+        $messageType = "error";
+    } elseif (
+        !preg_match('/^[0-9]{10}$/', $phone_number) ||
+        !preg_match('/^[0-9]{10}$/', $whatsapp_number)
+    ) {
+        $message = "Enter valid 10-digit phone and WhatsApp numbers.";
+        $messageType = "error";
+    } else {
+        try {
+            $conn->begin_transaction();
+
+            // Reuse an existing student record when the enrollment
+            // number is already registered.
+            $studentStmt = $conn->prepare(
+                "SELECT id FROM students
+                 WHERE enrollment_number = ?
+                 LIMIT 1"
+            );
+            if (!$studentStmt) {
+                throw new Exception("Unable to check student.");
+            }
+
+            $studentStmt->bind_param("s", $enrollment_number);
+            $studentStmt->execute();
+            $studentResult = $studentStmt->get_result();
+            $existingStudent = $studentResult->fetch_assoc();
+            $studentStmt->close();
+
+            if ($existingStudent) {
+                $studentId = (int)$existingStudent['id'];
+
+                // Update the existing student's details.
+                $updateStmt = $conn->prepare(
+                    "UPDATE students
+                     SET name = ?, department = ?, program = ?,
+                         semester = ?, phone_number = ?,
+                         whatsapp_number = ?
+                     WHERE id = ?"
+                );
+                if (!$updateStmt) {
+                    throw new Exception("Unable to update student.");
+                }
+
+                $updateStmt->bind_param(
+                    "ssssssi",
+                    $name, $department, $program, $semester,
+                    $phone_number, $whatsapp_number, $studentId
+                );
+                $updateStmt->execute();
+                $updateStmt->close();
+            } else {
+                $insertStudent = $conn->prepare(
+                    "INSERT INTO students
+                     (name, department, program, semester,
+                      enrollment_number, phone_number, whatsapp_number)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)"
+                );
+                if (!$insertStudent) {
+                    throw new Exception("Unable to create student.");
+                }
+
+                $insertStudent->bind_param(
+                    "sssssss",
+                    $name, $department, $program, $semester,
+                    $enrollment_number, $phone_number, $whatsapp_number
+                );
+                $insertStudent->execute();
+                $studentId = (int)$conn->insert_id;
+                $insertStudent->close();
+            }
+
+            // Prevent registering the same student twice for one event.
+            $duplicateStmt = $conn->prepare(
+                "SELECT id FROM registrations
+                 WHERE student_id = ? AND event_id = ?
+                 LIMIT 1"
+            );
+            if (!$duplicateStmt) {
+                throw new Exception("Unable to check existing registration.");
+            }
+
+            $duplicateStmt->bind_param("ii", $studentId, $eventId);
+            $duplicateStmt->execute();
+            $duplicateResult = $duplicateStmt->get_result();
+            $alreadyRegistered = $duplicateResult->fetch_assoc();
+            $duplicateStmt->close();
+
+            if ($alreadyRegistered) {
+                $conn->rollback();
+                $message = "You have already registered for this event.";
+                $messageType = "error";
+            } else {
+                $registrationCode = "EVT-" . date("Y") . "-" .
+                    strtoupper(bin2hex(random_bytes(4)));
+
+                $price = (float)$event['price'];
+                $isPaidEvent = $price > 0;
+                $paymentStatus = $isPaidEvent ? 'pending' : 'not_required';
+
+                $registrationStmt = $conn->prepare(
+                    "INSERT INTO registrations
+                     (student_id, event_id, registration_code, payment_status)
+                     VALUES (?, ?, ?, ?)"
+                );
+                if (!$registrationStmt) {
+                    throw new Exception("Unable to create registration.");
+                }
+
+                $registrationStmt->bind_param(
+                    "iiss",
+                    $studentId, $eventId, $registrationCode, $paymentStatus
+                );
+                $registrationStmt->execute();
+                $registrationStmt->close();
+
+                $conn->commit();
+
+                if ($isPaidEvent) {
+                    header(
+                        "Location: payment.php?code=" .
+                        urlencode($registrationCode)
+                    );
+                } else {
+                    header(
+                        "Location: thankyou.php?code=" .
+                        urlencode($registrationCode)
+                    );
+                }
+                exit;
+            }
+        } catch (Throwable $e) {
+            try {
+                $conn->rollback();
+            } catch (Throwable $rollbackError) {
+                // Ignore rollback errors.
+            }
+
+            // Show the actual error during local development.
+            error_log($e->getMessage());
+            $message = "Registration failed. Please check the database setup and try again.";
+            $messageType = "error";
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -361,232 +627,107 @@ exit;
         <?php endif; ?>
 
 
-        <form method="POST" action="">
-
-
-            <!-- Name -->
-
-            <div class="form-group">
-
-                <label for="name">
-                    Full Name
-                </label>
-
-                <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    placeholder="Enter your full name"
-                    value="<?php echo htmlspecialchars($name ?? ''); ?>"
-                    required
-                >
-
-            </div>
-
-
-            <!-- Department -->
-
-            <div class="form-group">
-
-                <label for="department">
-                    Department
-                </label>
-
-                <select
-                    id="department"
-                    name="department"
-                    required
-                    onchange="updatePrograms()"
-                >
-
-                    <option value="">
-                        Choose your department
-                    </option>
-
-                    <?php foreach ($programs as $departmentName => $programList): ?>
-
-                        <option
-                            value="<?php echo htmlspecialchars($departmentName); ?>"
-                            <?php
-                            echo (($department ?? '') === $departmentName)
-                                ? 'selected'
-                                : '';
-                            ?>
-                        >
-
-                            <?php echo htmlspecialchars($departmentName); ?>
-
-                        </option>
-
-                    <?php endforeach; ?>
-
-                </select>
-
-            </div>
-
-
-            <!-- Program -->
-
-            <div class="form-group">
-
-                <label for="program">
-                    Program
-                </label>
-
-                <select
-                    id="program"
-                    name="program"
-                    required
-                >
-
-                    <option value="">
-                        Choose your program
-                    </option>
-
-                </select>
-
-            </div>
-
-
-            <!-- Semester -->
-
-            <div class="form-group">
-
-                <label for="semester">
-                    Semester
-                </label>
-
-                <select
-                    id="semester"
-                    name="semester"
-                    required
-                >
-
-                    <option value="">
-                        Choose semester
-                    </option>
-
-                    <option value="Semester 1">
-                        Semester 1
-                    </option>
-
-                    <option value="Semester 2">
-                        Semester 2
-                    </option>
-
-                    <option value="Semester 3">
-                        Semester 3
-                    </option>
-
-                    <option value="Semester 4">
-                        Semester 4
-                    </option>
-
-                    <option value="Semester 5">
-                        Semester 5
-                    </option>
-
-                    <option value="Semester 6">
-                        Semester 6
-                    </option>
-
-                    <option value="Semester 7">
-                        Semester 7
-                    </option>
-
-                    <option value="Semester 8">
-                        Semester 8
-                    </option>
-
-                </select>
-
-            </div>
-
-
-            <!-- Enrollment Number -->
-
-            <div class="form-group">
-
-                <label for="enrollment_number">
-                    Enrollment Number
-                </label>
-
-                <input
-                    type="text"
-                    id="enrollment_number"
-                    name="enrollment_number"
-                    placeholder="Enter enrollment number"
-                    value="<?php echo htmlspecialchars($enrollment_number ?? ''); ?>"
-                    required
-                >
-
-            </div>
-
-
-            <div class="row">
-
-                <!-- Phone -->
-
-                <div class="form-group">
-
-                    <label for="phone_number">
-                        Phone Number
-                    </label>
-
-                    <input
-                        type="tel"
-                        id="phone_number"
-                        name="phone_number"
-                        maxlength="10"
-                        pattern="[0-9]{10}"
-                        placeholder="9876543210"
-                        value="<?php echo htmlspecialchars($phone_number ?? ''); ?>"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- WhatsApp -->
-
-                <div class="form-group">
-
-                    <label for="whatsapp_number">
-                        WhatsApp Number
-                    </label>
-
-                    <input
-                        type="tel"
-                        id="whatsapp_number"
-                        name="whatsapp_number"
-                        maxlength="10"
-                        pattern="[0-9]{10}"
-                        placeholder="9876543210"
-                        value="<?php echo htmlspecialchars($whatsapp_number ?? ''); ?>"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-
-            <!-- Submit -->
-
-            <button
-                type="submit"
-                class="btn"
-            >
-                Register Now
-            </button>
-
-        </form>
-
+    
+<?php if ($eventError !== ""): ?>
+
+    <div class="message error">
+        <?= htmlspecialchars($eventError, ENT_QUOTES, 'UTF-8') ?>
     </div>
 
-</div>
+    <p><a href="event.php">Back to events</a></p>
 
+<?php else: ?>
 
+    <h2>
+        Register for:
+        <?= htmlspecialchars($event['title'], ENT_QUOTES, 'UTF-8') ?>
+    </h2>
+
+    <p>
+        Event fee:
+        <?= (float)$event['price'] <= 0
+            ? 'FREE'
+            : '₹' . number_format((float)$event['price'], 2) ?>
+    </p>
+
+    <form method="POST" action="">
+        <input type="hidden" name="event_id"
+               value="<?= (int)$eventId ?>">
+
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name"
+                   value="<?= htmlspecialchars($name ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                   required>
+        </div>
+
+        <div class="form-group">
+            <label for="department">Department</label>
+            <select id="department" name="department"
+                    required onchange="updatePrograms()">
+                <option value="">Choose your department</option>
+
+                <?php foreach ($programs as $departmentName => $programList): ?>
+                    <option value="<?= htmlspecialchars($departmentName, ENT_QUOTES, 'UTF-8') ?>"
+                        <?= (($department ?? '') === $departmentName) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($departmentName, ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="program">Program</label>
+            <select id="program" name="program" required>
+                <option value="">Choose your program</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="semester">Semester</label>
+            <select id="semester" name="semester" required>
+                <option value="">Choose semester</option>
+
+                <?php for ($i = 1; $i <= 8; $i++): ?>
+                    <option value="Semester <?= $i ?>"
+                        <?= (($semester ?? '') === "Semester $i") ? 'selected' : '' ?>>
+                        Semester <?= $i ?>
+                    </option>
+                <?php endfor; ?>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="enrollment_number">Enrollment Number</label>
+            <input type="text" id="enrollment_number"
+                   name="enrollment_number"
+                   value="<?= htmlspecialchars($enrollment_number ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                   required>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label for="phone_number">Phone Number</label>
+                <input type="tel" id="phone_number" name="phone_number"
+                       maxlength="10" pattern="[0-9]{10}"
+                       value="<?= htmlspecialchars($phone_number ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                       required>
+            </div>
+
+            <div class="form-group">
+                <label for="whatsapp_number">WhatsApp Number</label>
+                <input type="tel" id="whatsapp_number"
+                       name="whatsapp_number"
+                       maxlength="10" pattern="[0-9]{10}"
+                       value="<?= htmlspecialchars($whatsapp_number ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                       required>
+            </div>
+        </div>
+
+        <button type="submit" class="btn">Register Now</button>
+    </form>
+
+<?php endif; ?>
 <script>
 
     // PHP department → program data

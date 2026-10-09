@@ -9,21 +9,26 @@ require_once __DIR__ . '/../config/database.php';
 // FETCH UPCOMING EVENTS
 // --------------------------------------------------
 
+
 $today = date("Y-m-d");
+
+// --------------------------------------------------
+// FETCH UPCOMING EVENTS
+// --------------------------------------------------
 
 $upcoming_sql = "
     SELECT *
     FROM events
-    WHERE event_date >= :today
+    WHERE event_date >= ?
     ORDER BY event_date ASC, start_time ASC
 ";
 
 $upcoming_stmt = $conn->prepare($upcoming_sql);
-$upcoming_stmt->execute([
-    ':today' => $today
-]);
+$upcoming_stmt->bind_param("s", $today);
+$upcoming_stmt->execute();
 
-$upcoming_events = $upcoming_stmt->fetchAll();
+$upcoming_result = $upcoming_stmt->get_result();
+$upcoming_events = $upcoming_result->fetch_all(MYSQLI_ASSOC);
 
 
 // --------------------------------------------------
@@ -33,16 +38,19 @@ $upcoming_events = $upcoming_stmt->fetchAll();
 $past_sql = "
     SELECT *
     FROM events
-    WHERE event_date < :today
+    WHERE event_date < ?
     ORDER BY event_date DESC, start_time DESC
 ";
 
 $past_stmt = $conn->prepare($past_sql);
-$past_stmt->execute([
-    ':today' => $today
-]);
+$past_stmt->bind_param("s", $today);
+$past_stmt->execute();
 
-$past_events = $past_stmt->fetchAll();
+$past_result = $past_stmt->get_result();
+$past_events = $past_result->fetch_all(MYSQLI_ASSOC);
+
+
+
 
 
 // --------------------------------------------------
@@ -724,33 +732,8 @@ require_once "header.php";
 
 <main class="events-page">
 
-    <!-- ==================================================
-         HERO
-    ================================================== -->
+   
 
-    <section class="events-hero">
-
-        <div class="events-container">
-
-            <div class="events-badge">
-                ✦ Discover College Events
-            </div>
-
-            <h1>
-                Discover.
-                <span>Register.</span>
-                Participate.
-            </h1>
-
-            <p>
-                Explore upcoming and past college events,
-                discover exciting experiences, and register
-                for the events you don't want to miss.
-            </p>
-
-        </div>
-
-    </section>
 
 
     <!-- ==================================================
@@ -828,19 +811,32 @@ require_once "header.php";
                         ?>
 
                         <a
-                            href="event-details.php?id=<?= (int)$event['id'] ?>"
+                            href="event_details.php?id=<?= (int)$event['id'] ?>"
                             class="event-card"
                         >
 
-                            <div class="event-image-wrapper">
+                          
+<?php
+$imageName = $event['image'] ?? '';
 
-                                <img
-                                    src="<?= htmlspecialchars($image) ?>"
-                                    alt="<?= htmlspecialchars($event['title']) ?>"
-                                    class="event-image"
-                                    loading="lazy"
-                                    onerror="this.src='assets/images/event-placeholder.jpg';"
-                                >
+$imagePath = '../uploads/events/' . basename($imageName);
+
+$physicalPath = __DIR__ . '/../uploads/events/' . basename($imageName);
+
+if (!empty($imageName) && file_exists($physicalPath)) {
+    $imageUrl = $imagePath;
+} else {
+    $imageUrl = 'assets/images/event-placeholder.jpg';
+}
+?>
+
+<img
+    src="<?= htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8') ?>"
+    alt="<?= htmlspecialchars($event['title'] ?? 'Event', ENT_QUOTES, 'UTF-8') ?>"
+    class="event-image"
+>
+
+
 
 
                                 <div class="event-date-badge">
