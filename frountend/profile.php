@@ -187,7 +187,7 @@ include './header.php';
             <div class="events-empty-message">
                 <h3>No Events Registered Yet</h3>
                 <p>Register for an event and your ticket will appear here.</p>
-                <a href="events.php" class="logout-button">Explore Events</a>
+                <a href="event.php" class="logout-button">Explore Events</a>
             </div>
 
         <?php else: ?>
