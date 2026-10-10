@@ -177,7 +177,7 @@ function e($value) {
 
         <div class="links no-print">
             <a href="scan_attendance.php">← Open QR Scanner</a>
-            <a href="../frountend/event.php">View Events</a>
+            <a href="events.php">View Events</a>
         </div>
     </div>
 

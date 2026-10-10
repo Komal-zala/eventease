@@ -1,693 +1,289 @@
-<?php
-session_start();
-include './header.php';
-$page_title = "EventEase | My Profile";
 
-if (!isset($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true) {
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['user_logged_in'])) {
     header("Location: login.php");
     exit;
 }
 
 $user_name = $_SESSION['user_name'] ?? 'EventEase User';
 $user_email = $_SESSION['user_email'] ?? 'user@eventease.com';
+$enroll_no = $_SESSION['enroll_no'] ?? '';
 
+$parts = preg_split('/\s+/', trim($user_name));
 $initials = '';
+foreach ($parts as $part) {
+    if ($part !== '') $initials .= strtoupper(substr($part, 0, 1));
+}
+$initials = substr($initials, 0, 2);
 
-$name_parts = preg_split('/\s+/', trim($user_name));
+$registered_events = [];
+$event_error = '';
 
-foreach ($name_parts as $part) {
-    if ($part !== '') {
-        $initials .= strtoupper(substr($part, 0, 1));
+$db = new mysqli("localhost", "root", "", "eventease");
+
+if ($db->connect_error) {
+    $event_error = "Database connection failed.";
+} elseif ($enroll_no === '') {
+    $event_error = "Enrollment number is missing from your login session.";
+} else {
+    $db->set_charset("utf8mb4");
+
+    $sql = "SELECT e.id AS event_id, e.title, e.description,
+                   e.event_date, e.start_time, e.end_time,
+                   e.venue, e.organizer, e.price,
+                   r.registration_code, r.qr_code,
+                   r.registered_at, r.payment_status
+            FROM students s
+            JOIN registrations r ON r.student_id = s.id
+            JOIN events e ON e.id = r.event_id
+            WHERE s.enrollment_number = ?
+            ORDER BY r.registered_at DESC";
+
+    $stmt = $db->prepare($sql);
+
+    if ($stmt) {
+        $stmt->bind_param("s", $enroll_no);
+
+        if ($stmt->execute()) {
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $registered_events[] = $row;
+            }
+        } else {
+            $event_error = "Unable to load registered events.";
+        }
+        $stmt->close();
+    } else {
+        $event_error = "Unable to load registered events.";
     }
 }
 
-$initials = substr($initials, 0, 2);
+if (isset($db) && $db instanceof mysqli) {
+    $db->close();
+}
+
+$page_title = "EventEase | My Profile";
+include './header.php';
 ?>
 
 <style>
-.profile-page,
-.profile-page * {
-    box-sizing: border-box;
-}
-
-.profile-page {
-    min-height: calc(100vh - 75px);
-    padding: 55px 25px 75px;
-    background:
-        radial-gradient(circle at 5% 10%, rgba(124, 58, 237, 0.07), transparent 28%),
-        radial-gradient(circle at 95% 85%, rgba(192, 38, 211, 0.07), transparent 28%),
-        #faf8fd;
-    color: #24172f;
-    font-family: Arial, sans-serif;
-}
-
-.profile-page .profile-container {
-    max-width: 1120px;
-    margin: 0 auto;
-}
-
-.profile-page .profile-heading {
-    margin-bottom: 28px;
-}
-
-.profile-page .profile-heading .eyebrow {
-    display: inline-block;
-    color: #7c3aed;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-}
-
-.profile-page .profile-heading h1 {
-    margin: 0;
-    font-size: 38px;
-    letter-spacing: -1px;
-}
-
-.profile-page .profile-heading p {
-    margin: 10px 0 0;
-    color: #83788d;
-    font-size: 14px;
-}
-
-.profile-page .profile-layout {
-    display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 25px;
-}
-
-.profile-page .profile-card {
-    background: rgba(255, 255, 255, 0.96);
-    border: 1px solid #eee7f4;
-    border-radius: 26px;
-    box-shadow: 0 20px 60px rgba(59, 25, 88, 0.08);
-    overflow: hidden;
-}
-
-.profile-page .profile-sidebar {
-    padding: 34px 28px;
-    position: relative;
-}
-
-.profile-page .profile-cover {
-    height: 105px;
-    margin: -34px -28px 0;
-    background:
-        radial-gradient(circle at 15% 30%, rgba(255,255,255,0.22), transparent 20%),
-        radial-gradient(circle at 90% 80%, rgba(255,255,255,0.14), transparent 25%),
-        linear-gradient(135deg, #2d0b4d, #7026b9, #c026d3);
-}
-
-.profile-page .profile-avatar {
-    width: 104px;
-    height: 104px;
-    margin: -52px auto 18px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #7c3aed, #c026d3);
-    border: 6px solid #fff;
-    box-shadow: 0 12px 30px rgba(124, 58, 237, 0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 30px;
-    font-weight: 900;
-    position: relative;
-    z-index: 2;
-}
-
-.profile-page .profile-name {
-    text-align: center;
-    margin: 0;
-    font-size: 21px;
-}
-
-.profile-page .profile-email {
-    text-align: center;
-    color: #8b8292;
-    font-size: 13px;
-    margin: 7px 0 25px;
-    word-break: break-word;
-}
-
-.profile-page .profile-status {
-    width: fit-content;
-    margin: 0 auto 28px;
-    padding: 7px 13px;
-    border-radius: 100px;
-    background: #f1eaff;
-    color: #7132c7;
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.profile-page .profile-menu {
-    border-top: 1px solid #eee8f3;
-    padding-top: 20px;
-}
-
-.profile-page .profile-menu a {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    text-decoration: none;
-    color: #655b6e;
-    padding: 13px 14px;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 5px;
-    transition: 0.2s ease;
-}
-
-.profile-page .profile-menu a:hover,
-.profile-page .profile-menu a.active {
-    background: #f6efff;
-    color: #7132c7;
-}
-
-.profile-page .menu-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
-    background: #f3edf9;
-    position: relative;
-    flex-shrink: 0;
-}
-
-.profile-page .menu-icon::before {
-    content: "";
-    position: absolute;
-    width: 9px;
-    height: 9px;
-    border: 2px solid currentColor;
-    border-radius: 50%;
-    left: 7px;
-    top: 4px;
-}
-
-.profile-page .menu-icon::after {
-    content: "";
-    position: absolute;
-    width: 13px;
-    height: 7px;
-    border: 2px solid currentColor;
-    border-bottom: 0;
-    border-radius: 10px 10px 0 0;
-    left: 5px;
-    bottom: 4px;
-}
-
-.profile-page .profile-content {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-}
-
-.profile-page .info-card {
-    background: rgba(255,255,255,0.96);
-    border: 1px solid #eee7f4;
-    border-radius: 26px;
-    padding: 32px;
-    box-shadow: 0 20px 60px rgba(59, 25, 88, 0.07);
-}
-
-.profile-page .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    margin-bottom: 26px;
-}
-
-.profile-page .card-header h2 {
-    margin: 0;
-    font-size: 21px;
-}
-
-.profile-page .card-header p {
-    margin: 6px 0 0;
-    color: #8a8191;
-    font-size: 13px;
-}
-
-.profile-page .edit-button {
-    text-decoration: none;
-    padding: 10px 17px;
-    border-radius: 11px;
-    background: #f4edff;
-    color: #7132c7;
-    font-size: 12px;
-    font-weight: 800;
-    transition: 0.2s ease;
-    white-space: nowrap;
-}
-
-.profile-page .edit-button:hover {
-    background: #e9dcff;
-}
-
-.profile-page .info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
-}
-
-.profile-page .info-item {
-    padding: 18px;
-    border: 1px solid #eee8f3;
-    border-radius: 15px;
-    background: #fdfcff;
-}
-
-.profile-page .info-label {
-    display: block;
-    color: #958c9d;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-}
-
-.profile-page .info-value {
-    display: block;
-    color: #302039;
-    font-size: 14px;
-    font-weight: 700;
-    word-break: break-word;
-}
-
-.profile-page .quick-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-}
-
-.profile-page .quick-card {
-    padding: 21px;
-    border-radius: 17px;
-    background: linear-gradient(145deg, #faf7ff, #fff);
-    border: 1px solid #eee7f4;
-}
-
-.profile-page .quick-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 13px;
-    background: #f0e7ff;
-    margin-bottom: 14px;
-    position: relative;
-}
-
-.profile-page .quick-icon.ticket::before {
-    content: "";
-    position: absolute;
-    width: 21px;
-    height: 15px;
-    border: 2px solid #7c3aed;
-    border-radius: 4px;
-    left: 10px;
-    top: 12px;
-}
-
-.profile-page .quick-icon.ticket::after {
-    content: "";
-    position: absolute;
-    width: 2px;
-    height: 11px;
-    background: #7c3aed;
-    left: 20px;
-    top: 14px;
-}
-
-.profile-page .quick-icon.calendar::before {
-    content: "";
-    position: absolute;
-    width: 22px;
-    height: 19px;
-    border: 2px solid #7c3aed;
-    border-radius: 4px;
-    left: 9px;
-    top: 12px;
-}
-
-.profile-page .quick-icon.calendar::after {
-    content: "";
-    position: absolute;
-    width: 12px;
-    height: 2px;
-    background: #7c3aed;
-    left: 14px;
-    top: 18px;
-}
-
-.profile-page .quick-icon.security::before {
-    content: "";
-    position: absolute;
-    width: 19px;
-    height: 23px;
-    border: 2px solid #7c3aed;
-    border-radius: 11px 11px 14px 14px;
-    left: 10px;
-    top: 8px;
-}
-
-.profile-page .quick-icon.security::after {
-    content: "";
-    position: absolute;
-    width: 7px;
-    height: 4px;
-    border-left: 2px solid #7c3aed;
-    border-bottom: 2px solid #7c3aed;
-    transform: rotate(-45deg);
-    left: 16px;
-    top: 18px;
-}
-
-.profile-page .quick-card h3 {
-    margin: 0 0 5px;
-    font-size: 14px;
-}
-
-.profile-page .quick-card p {
-    margin: 0;
-    color: #8a8191;
-    font-size: 12px;
-    line-height: 1.5;
-}
-
-.profile-page .logout-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    padding: 23px;
-    border-radius: 18px;
-    background: #fff8fa;
-    border: 1px solid #f8dfe5;
-}
-
-.profile-page .logout-section h3 {
-    margin: 0 0 5px;
-    font-size: 14px;
-}
-
-.profile-page .logout-section p {
-    margin: 0;
-    color: #927f85;
-    font-size: 12px;
-}
-
-.profile-page .logout-button {
-    text-decoration: none;
-    padding: 11px 18px;
-    border-radius: 11px;
-    background: #fff;
-    border: 1px solid #f1cbd4;
-    color: #b4233c;
-    font-size: 12px;
-    font-weight: 800;
-    white-space: nowrap;
-    transition: 0.2s ease;
-}
-
-.profile-page .logout-button:hover {
-    background: #fff0f3;
-}
-
-@media (max-width: 900px) {
-    .profile-page .profile-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-page .profile-sidebar {
-        max-width: 100%;
-    }
-}
-
-@media (max-width: 650px) {
-    .profile-page {
-        padding: 35px 15px 55px;
-    }
-
-    .profile-page .profile-heading h1 {
-        font-size: 30px;
-    }
-
-    .profile-page .info-card {
-        padding: 23px;
-    }
-
-    .profile-page .info-grid,
-    .profile-page .quick-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-page .card-header {
-        align-items: flex-start;
-    }
-
-    .profile-page .logout-section {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-}
+.profile-page,.profile-page *{box-sizing:border-box}
+.profile-page{min-height:calc(100vh - 75px);padding:40px 20px 60px;background:radial-gradient(circle at 5% 10%,#7c3aed12,transparent 28%),radial-gradient(circle at 95% 85%,#c026d312,transparent 28%),#faf8fd;color:#24172f;font-family:Arial,sans-serif}
+.profile-container{max-width:1050px;margin:auto}
+.profile-heading{margin-bottom:25px}
+.profile-heading .eyebrow{color:#7c3aed;font-size:11px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
+.profile-heading h1{margin:10px 0;font-size:36px}
+.profile-heading p,.card-header p,.logout-section p,.registered-events-heading p{color:#83788d;font-size:13px}
+.profile-layout{display:grid;grid-template-columns:280px 1fr;gap:22px}
+.profile-card,.info-card,.registered-event-card,.events-empty-message{background:#fff;border:1px solid #eee7f4;border-radius:20px;box-shadow:0 12px 35px #3b195810;overflow:hidden}
+.profile-sidebar{padding:25px}
+.profile-cover{height:90px;margin:-25px -25px 0;background:linear-gradient(135deg,#2d0b4d,#7026b9,#c026d3)}
+.profile-avatar{width:85px;height:85px;margin:-42px auto 15px;border:5px solid white;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#c026d3);display:flex;align-items:center;justify-content:center;color:white;font-size:26px;font-weight:bold}
+.profile-name,.profile-email{text-align:center;overflow-wrap:anywhere}
+.profile-name{font-size:20px;margin:0}
+.profile-email{font-size:13px;color:#8b8292}
+.profile-content{display:flex;flex-direction:column;gap:20px}
+.info-card{padding:25px}
+.card-header{margin-bottom:20px}
+.card-header h2,.registered-events-heading h2{margin:0 0 8px;font-size:22px}
+.info-grid,.registered-event-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.info-item,.registered-event-detail{padding:15px;border:1px solid #eee8f3;border-radius:12px;background:#fdfcff;overflow-wrap:anywhere}
+.info-label,.registered-event-detail strong{display:block;color:#958c9d;font-size:10px;font-weight:bold;text-transform:uppercase;margin-bottom:8px}
+.info-value,.registered-event-detail span{font-size:13px;font-weight:bold;color:#302039}
+.logout-section{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:20px;border-radius:16px;background:#fff8fa;border:1px solid #f8dfe5}
+.logout-section h3{margin:0 0 6px;font-size:15px}
+.logout-section p{margin:0}
+.logout-button{display:inline-block;padding:11px 18px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#c026d3);color:white;text-decoration:none;font-size:13px;font-weight:bold;white-space:nowrap}
+.registered-events{margin-top:30px}
+.registered-events-heading{margin-bottom:18px}
+.registered-event-card{padding:22px;margin-bottom:18px}
+.registered-event-card h3{color:#7026b9;margin:0 0 10px;font-size:21px}
+.registered-event-description{font-size:13px;color:#83788d;line-height:1.6}
+.event-qr-section{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid #eee8f3}
+.event-registration-code{color:#6d28d9;font-size:14px;font-weight:bold;overflow-wrap:anywhere}
+.event-qr-image{width:140px;height:140px;object-fit:contain;padding:6px;border:1px solid #eee7f4;border-radius:12px}
+.event-qr-message,.events-empty-message{color:#83788d;font-size:13px;line-height:1.6}
+.events-empty-message{padding:25px;text-align:center}
+.events-empty-message h3{color:#302039}
+@media(max-width:800px){.profile-layout{grid-template-columns:1fr}}
+@media(max-width:550px){.profile-page{padding:30px 14px}.profile-heading h1{font-size:30px}.info-card{padding:18px}.info-grid,.registered-event-details{grid-template-columns:1fr}.logout-section{align-items:flex-start;flex-direction:column}.registered-event-card{padding:17px}}
 </style>
 
-<div class="profile-page">
-
-    <div class="profile-container">
-
-        <div class="profile-heading">
-            <span class="eyebrow">Account Center</span>
-
-            <h1>My Profile</h1>
-
-            <p>
-                Manage your EventEase account and personal information.
-            </p>
-        </div>
-
-        <div class="profile-layout">
-
-            <div class="profile-card profile-sidebar">
-
-                <div class="profile-cover"></div>
-
-                <div class="profile-avatar">
-                    <?= htmlspecialchars($initials) ?>
-                </div>
-
-                <h2 class="profile-name">
-                    <?= htmlspecialchars($user_name) ?>
-                </h2>
-
-                <p class="profile-email">
-                    <?= htmlspecialchars($user_email) ?>
-                </p>
-
-                <div class="profile-status">
-                    ACCOUNT ACTIVE
-                </div>
-
-                <div class="profile-menu">
-
-                    <a href="profile.php" class="active">
-                        <span class="menu-icon"></span>
-                        Profile
-                    </a>
-
-                    <a href="edit-profile.php">
-                        <span class="menu-icon"></span>
-                        Edit Profile
-                    </a>
-
-                    <a href="my-bookings.php">
-                        <span class="menu-icon"></span>
-                        My Bookings
-                    </a>
-
-                    <a href="change-password.php">
-                        <span class="menu-icon"></span>
-                        Change Password
-                    </a>
-
-                    <a href="notifications.php">
-                        <span class="menu-icon"></span>
-                        Notifications
-                    </a>
-
-                </div>
-
-            </div>
-
-            <div class="profile-content">
-
-                <div class="info-card">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2>Personal Information</h2>
-
-                            <p>
-                                Your basic EventEase account information.
-                            </p>
-                        </div>
-
-                        <a href="edit-profile.php" class="edit-button">
-                            Edit Profile
-                        </a>
-
-                    </div>
-
-                    <div class="info-grid">
-
-                        <div class="info-item">
-
-                            <span class="info-label">
-                                Full Name
-                            </span>
-
-                            <span class="info-value">
-                                <?= htmlspecialchars($user_name) ?>
-                            </span>
-
-                        </div>
-
-                        <div class="info-item">
-
-                            <span class="info-label">
-                                Email Address
-                            </span>
-
-                            <span class="info-value">
-                                <?= htmlspecialchars($user_email) ?>
-                            </span>
-
-                        </div>
-
-                        <div class="info-item">
-
-                            <span class="info-label">
-                                Account Type
-                            </span>
-
-                            <span class="info-value">
-                                Client Account
-                            </span>
-
-                        </div>
-
-                        <div class="info-item">
-
-                            <span class="info-label">
-                                Account Status
-                            </span>
-
-                            <span class="info-value">
-                                Active
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="info-card">
-
-                    <div class="card-header">
-
-                        <div>
-                            <h2>EventEase Features</h2>
-
-                            <p>
-                                Everything you can manage from your account.
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <div class="quick-grid">
-
-                        <div class="quick-card">
-
-                            <div class="quick-icon ticket"></div>
-
-                            <h3>
-                                Digital Tickets
-                            </h3>
-
-                            <p>
-                                Access your event tickets and booking details
-                                from one place.
-                            </p>
-
-                        </div>
-
-                        <div class="quick-card">
-
-                            <div class="quick-icon calendar"></div>
-
-                            <h3>
-                                Event Bookings
-                            </h3>
-
-                            <p>
-                                View and manage all your upcoming event
-                                registrations.
-                            </p>
-
-                        </div>
-
-                        <div class="quick-card">
-
-                            <div class="quick-icon security"></div>
-
-                            <h3>
-                                Account Security
-                            </h3>
-
-                            <p>
-                                Manage your password and keep your account
-                                protected.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="logout-section">
-
-                    <div>
-
-                        <h3>
-                            Sign out of EventEase
-                        </h3>
-
-                        <p>
-                            You can log back in anytime using your account.
-                        </p>
-
-                    </div>
-
-                    <a href="logout.php" class="logout-button">
-                        Logout
-                    </a>
-
-                </div>
-
-            </div>
-
-        </div>
-
+<main class="profile-page">
+<div class="profile-container">
+
+    <div class="profile-heading">
+        <span class="eyebrow">Account Center</span>
+        <h1>My Profile</h1>
+        <p>View your personal information and registered events.</p>
     </div>
 
+    <div class="profile-layout">
+        <section class="profile-card profile-sidebar">
+            <div class="profile-cover"></div>
+            <div class="profile-avatar">
+                <?= htmlspecialchars($initials ?: 'EU', ENT_QUOTES, 'UTF-8') ?>
+            </div>
+            <h2 class="profile-name">
+                <?= htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8') ?>
+            </h2>
+            <p class="profile-email">
+                <?= htmlspecialchars($user_email, ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        </section>
+
+        <div class="profile-content">
+            <section class="info-card">
+                <div class="card-header">
+                    <h2>Personal Information</h2>
+                    <p>Your EventEase account details.</p>
+                </div>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Full Name</span>
+                        <span class="info-value"><?= htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email Address</span>
+                        <span class="info-value"><?= htmlspecialchars($user_email, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Enrollment Number</span>
+                        <span class="info-value"><?= htmlspecialchars($enroll_no ?: 'Not Available', ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="logout-section">
+                <div>
+                    <h3>Sign out of EventEase</h3>
+                    <p>Log out securely from your account.</p>
+                </div>
+                <a href="logout.php" class="logout-button">Logout</a>
+            </section>
+        </div>
+    </div>
+
+    <section class="registered-events">
+        <div class="registered-events-heading">
+            <h2>My Registered Events</h2>
+            <p>Your event details, registration codes and QR tickets.</p>
+        </div>
+
+        <?php if ($event_error !== ''): ?>
+
+            <div class="events-empty-message">
+                <h3>Events Unavailable</h3>
+                <p><?= htmlspecialchars($event_error, ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+
+        <?php elseif (empty($registered_events)): ?>
+
+            <div class="events-empty-message">
+                <h3>No Events Registered Yet</h3>
+                <p>Register for an event and your ticket will appear here.</p>
+                <a href="events.php" class="logout-button">Explore Events</a>
+            </div>
+
+        <?php else: ?>
+
+            <?php foreach ($registered_events as $event): ?>
+                <article class="registered-event-card">
+                    <h3><?= htmlspecialchars($event['title'] ?? 'Event', ENT_QUOTES, 'UTF-8') ?></h3>
+
+                    <p class="registered-event-description">
+                        <?= nl2br(htmlspecialchars($event['description'] ?? 'No description available.', ENT_QUOTES, 'UTF-8')) ?>
+                    </p>
+
+                    <div class="registered-event-details">
+                        <div class="registered-event-detail">
+                            <strong>Event Date</strong>
+                            <span><?= !empty($event['event_date']) ? htmlspecialchars(date('d M Y', strtotime($event['event_date'])), ENT_QUOTES, 'UTF-8') : 'N/A' ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Time</strong>
+                            <span><?= htmlspecialchars($event['start_time'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($event['end_time'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Venue</strong>
+                            <span><?= htmlspecialchars($event['venue'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Organizer</strong>
+                            <span><?= htmlspecialchars($event['organizer'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Registered On</strong>
+                            <span><?= !empty($event['registered_at']) ? htmlspecialchars(date('d M Y', strtotime($event['registered_at'])), ENT_QUOTES, 'UTF-8') : 'N/A' ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Payment Status</strong>
+                            <span><?= htmlspecialchars(ucwords(str_replace('_', ' ', $event['payment_status'] ?? 'unknown')), ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="registered-event-detail">
+                            <strong>Price</strong>
+                            <span>₹<?= number_format((float)($event['price'] ?? 0), 2) ?></span>
+                        </div>
+                    </div>
+
+                    <div class="event-qr-section">
+                        <div>
+                            <strong>Registration Code</strong>
+                            <p class="event-registration-code">
+                                <?= htmlspecialchars($event['registration_code'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?>
+                            </p>
+                        </div>
+
+                        <?php
+                        $qr = trim((string)($event['qr_code'] ?? ''));
+                        $qr_path = '';
+
+                        if (
+                            $qr !== '' &&
+                            !preg_match('/[\x00-\x1F\x7F]/', $qr) &&
+                            !preg_match('~^(?:https?:)?//|^(?:data:|javascript:)~i', $qr) &&
+                            !str_contains($qr, '..') &&
+                            preg_match('~^[a-zA-Z0-9_./-]+$~', $qr)
+                        ) {
+                            $candidate = realpath(__DIR__ . '/' . $qr);
+                            $qr_dir = realpath(__DIR__ . '/qrcodes');
+
+                            if (
+                                $candidate !== false &&
+                                $qr_dir !== false &&
+                                str_starts_with($candidate, $qr_dir . DIRECTORY_SEPARATOR) &&
+                                is_file($candidate) &&
+                                in_array(strtolower(pathinfo($candidate, PATHINFO_EXTENSION)), ['png', 'jpg', 'jpeg', 'webp'], true)
+                            ) {
+                                $qr_path = $qr;
+                            }
+                        }
+                        ?>
+
+                        <?php if ($qr_path !== ''): ?>
+                            <img
+                                class="event-qr-image"
+                                src="<?= htmlspecialchars($qr_path, ENT_QUOTES, 'UTF-8') ?>"
+                                alt="Event QR code"
+                            >
+                        <?php else: ?>
+                            <p class="event-qr-message">
+                                QR image not found. Use your registration code for check-in.
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+
+        <?php endif; ?>
+    </section>
+
 </div>
-<?php include './footer.php';?>
+</main>
+
+<?php include './footer.php'; ?>

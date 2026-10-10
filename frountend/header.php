@@ -3,7 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true;
+$is_logged_in = (
+    isset($_SESSION["user_logged_in"], $_SESSION["user_id"]) &&
+    $_SESSION["user_logged_in"] === true
+);
 ?>
 
 <!DOCTYPE html>
@@ -12,7 +15,7 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#160d24">
-    <title><?= isset($page_title) ? $page_title : 'EventEase' ?></title>
+    <title><?= isset($page_title) ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') : 'EventEase' ?></title>
 
     <style>
         :root {
@@ -112,9 +115,8 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
             margin-right: 11px;
             border-radius: 50%;
             background: var(--gradient);
-            box-shadow:
-                0 0 0 6px rgba(124,58,237,.08),
-                0 0 25px rgba(124,58,237,.35);
+            box-shadow: 0 0 0 6px rgba(124,58,237,.08),
+                        0 0 25px rgba(124,58,237,.35);
         }
 
         .logo span {
@@ -132,9 +134,8 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
             border: 1px solid rgba(124,58,237,.08);
             border-radius: 17px;
             background: rgba(255,255,255,.58);
-            box-shadow:
-                0 10px 35px rgba(48,25,75,.05),
-                inset 0 1px 0 rgba(255,255,255,.9);
+            box-shadow: 0 10px 35px rgba(48,25,75,.05),
+                        inset 0 1px 0 rgba(255,255,255,.9);
         }
 
         .nav-links a {
@@ -197,11 +198,11 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
             gap: 9px;
         }
 
-        .login-link,
         .profile-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 9px;
             min-height: 43px;
             padding: 0 16px;
             color: var(--dark);
@@ -210,114 +211,60 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
             font-weight: 750;
             border-radius: 12px;
             transition: .3s ease;
+            white-space: nowrap;
         }
 
-        .login-link:hover,
         .profile-link:hover {
             color: var(--primary);
             background: rgba(124,58,237,.06);
             transform: translateY(-2px);
         }
 
-        .profile-link {
-            position: relative;
-            gap: 9px;
-        }
-
-        .profile-link::before {
-            content: "";
-            width: 25px;
-            height: 25px;
+        .profile-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 27px;
+            height: 27px;
             border-radius: 50%;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 800;
             background: var(--gradient);
             box-shadow: 0 4px 12px rgba(124,58,237,.20);
         }
 
-        .profile-link::after {
-            content: "";
-            position: absolute;
-            left: 25px;
-            top: 10px;
-            width: 7px;
-            height: 7px;
-            border: 1.5px solid #fff;
-            border-radius: 50%;
-            box-shadow: 0 5px 0 1px #fff;
-        }
-
-        .register-link,
         .logout-link {
-            position: relative;
-            overflow: hidden;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 45px;
-            padding: 0 21px;
-            color: #fff;
+            min-height: 43px;
+            padding: 0 17px;
+            color: #ffffff;
+            background: var(--gradient);
             text-decoration: none;
             font-size: 13px;
-            font-weight: 800;
-            border-radius: 13px;
-            background: var(--gradient);
-            box-shadow:
-                0 10px 25px rgba(124,58,237,.25),
-                inset 0 1px 0 rgba(255,255,255,.3);
+            font-weight: 750;
+            border-radius: 12px;
             transition: .3s ease;
+            white-space: nowrap;
+            box-shadow: 0 5px 15px rgba(124, 58, 237, .18);
         }
 
-        .logout-link {
-            background: linear-gradient(135deg, #4b1d68, #7c2d91);
-        }
-
-        .register-link::before,
-        .logout-link::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: -130%;
-            width: 70%;
-            height: 100%;
-            background: linear-gradient(
-                100deg,
-                transparent,
-                rgba(255,255,255,.45),
-                transparent
-            );
-            transform: skewX(-20deg);
-            transition: left .7s ease;
-        }
-
-        .register-link:hover::before,
-        .logout-link:hover::before {
-            left: 140%;
-        }
-
-        .register-link:hover,
         .logout-link:hover {
-            transform: translateY(-3px);
-            box-shadow:
-                0 16px 35px rgba(124,58,237,.34),
-                inset 0 1px 0 rgba(255,255,255,.35);
-        }
-
-        .register-link:active,
-        .logout-link:active {
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, .28);
         }
 
         .logo:focus-visible,
         .nav-links a:focus-visible,
-        .login-link:focus-visible,
         .profile-link:focus-visible,
-        .register-link:focus-visible,
         .logout-link:focus-visible {
             outline: 3px solid rgba(124,58,237,.25);
             outline-offset: 4px;
         }
 
         @media (max-width: 950px) {
-
             .header {
                 padding: 11px 20px;
             }
@@ -330,19 +277,16 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
                 padding: 9px 12px;
             }
 
-            .profile-link,
-            .login-link {
+            .profile-link {
                 padding: 0 12px;
             }
 
-            .register-link,
             .logout-link {
-                padding: 0 15px;
+                padding: 0 12px;
             }
         }
 
         @media (max-width: 760px) {
-
             .header {
                 padding: 11px 15px;
             }
@@ -383,10 +327,6 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
                 top: 0;
             }
 
-            .login-link {
-                display: none;
-            }
-
             .profile-link {
                 min-height: 36px;
                 padding: 0 10px;
@@ -395,29 +335,21 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
                 gap: 5px;
             }
 
-            .profile-link::before {
+            .profile-icon {
                 width: 21px;
                 height: 21px;
+                font-size: 10px;
             }
 
-            .profile-link::after {
-                left: 19px;
-                top: 8px;
-                width: 6px;
-                height: 6px;
-            }
-
-            .register-link,
             .logout-link {
                 min-height: 36px;
-                padding: 0 13px;
+                padding: 0 10px;
                 font-size: 11px;
                 border-radius: 10px;
             }
         }
 
         @media (max-width: 430px) {
-
             .header {
                 padding: 9px 11px;
             }
@@ -432,32 +364,21 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
                 margin-right: 8px;
             }
 
-            .nav-actions {
-                right: 0;
-            }
-
             .profile-link {
                 min-height: 33px;
                 padding: 0 8px;
                 font-size: 10px;
             }
 
-            .profile-link::before {
+            .profile-icon {
                 width: 18px;
                 height: 18px;
+                font-size: 9px;
             }
 
-            .profile-link::after {
-                left: 16px;
-                top: 7px;
-                width: 5px;
-                height: 5px;
-            }
-
-            .register-link,
             .logout-link {
                 min-height: 33px;
-                padding: 0 10px;
+                padding: 0 8px;
                 font-size: 10px;
             }
 
@@ -472,7 +393,6 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
         }
 
         @media (prefers-reduced-motion: reduce) {
-
             html {
                 scroll-behavior: auto;
             }
@@ -489,60 +409,38 @@ $is_logged_in = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'
 <body>
 
 <header class="header">
-
     <nav class="navbar">
 
         <a href="index.php" class="logo">
             Event<span>Ease</span>
         </a>
 
-       <div class="nav-links">
-
-    <a href="index.php">
-        Home
-    </a>
-
-    <a href="upcoming-events.php">
-        Upcoming Events
-    </a>
-
-    <a href="past-events.php">
-        Past Events
-    </a>
-
-    <a href="about.php">
-        About Us
-    </a>
-
-</div>
+        <div class="nav-links">
+            <a href="index.php">Home</a>
+            <a href="<?= $is_logged_in ? 'event.php' : 'login.php?redirect=event.php' ?>">Events</a>
+            <a href="about.php">About Us</a>
+        </div>
 
         <div class="nav-actions">
-
             <?php if ($is_logged_in): ?>
-
                 <a href="profile.php" class="profile-link">
+                    <span class="profile-icon">
+                        <?php
+                        echo htmlspecialchars(
+                            strtoupper(substr($_SESSION["user_name"] ?? "U", 0, 1)),
+                            ENT_QUOTES,
+                            "UTF-8"
+                        );
+                        ?>
+                    </span>
                     Profile
                 </a>
 
                 <a href="logout.php" class="logout-link">
                     Logout
                 </a>
-
-            <?php else: ?>
-
-                <a href="login.php" class="login-link">
-                    Login
-                </a>
-
-                <a href="register.php" class="register-link">
-                    Account
-                    
-                </a>
-
             <?php endif; ?>
-
         </div>
 
     </nav>
-
 </header>

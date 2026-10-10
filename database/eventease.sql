@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 09, 2026 at 04:50 PM
+-- Generation Time: Oct 10, 2026 at 07:48 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -41,7 +41,8 @@ CREATE TABLE `attendance` (
 
 INSERT INTO `attendance` (`id`, `registration_id`, `status`, `check_in_time`, `created_at`) VALUES
 (1, 21, 'present', '2026-10-09 19:50:16', '2026-10-09 14:20:16'),
-(2, 22, 'present', '2026-10-09 19:56:21', '2026-10-09 14:26:21');
+(2, 22, 'present', '2026-10-09 19:56:21', '2026-10-09 14:26:21'),
+(3, 26, 'present', '2026-10-10 09:24:03', '2026-10-10 03:54:03');
 
 -- --------------------------------------------------------
 
@@ -74,7 +75,10 @@ CREATE TABLE `events` (
 
 INSERT INTO `events` (`id`, `title`, `description`, `event_date`, `start_time`, `end_time`, `venue`, `organizer`, `capacity`, `price`, `image`, `registration_open`, `registration_deadline`, `status`, `created_at`, `updated_at`) VALUES
 (1, 'Hack', 'hi', '2026-10-16', '20:48:00', '20:47:00', 'Atmiya uni', 'HOD', 100, 0.00, 'event_6ac79b913f8d41.44791484.jpg', 1, NULL, 'published', '2026-10-04 15:14:36', '2026-10-08 13:33:05'),
-(2, 'Workshop', 'dghtyjtyjm', '2026-10-09', '10:58:00', '12:58:00', 'Atmiya University', 'cs', 100, 30.00, 'event_6ac8de4d5f4617.43669908.png', 1, '2026-10-09 17:59:00', 'published', '2026-10-09 12:30:05', '2026-10-09 12:30:05');
+(2, 'Workshop', 'dghtyjtyjm', '2026-10-09', '10:58:00', '12:58:00', 'Atmiya University', 'cs', 100, 30.00, 'event_6ac8de4d5f4617.43669908.png', 1, '2026-10-09 17:59:00', 'published', '2026-10-09 12:30:05', '2026-10-09 12:30:05'),
+(3, 'AI & Machine Learning Seminar', 'Explore artificial intelligence and machine learning applications.', '2026-10-15', '08:30:00', '00:34:00', 'Atmiya University', 'IT Department', 97, 100.00, 'event_6ac9ab19e00fc4.04118269.jpg', 1, '2026-10-14 08:32:00', 'published', '2026-10-10 03:03:53', '2026-10-10 03:03:53'),
+(4, 'Coding Workshop 2026', 'Learn basic programming and solve coding problems with other students.', '2026-10-10', '10:46:00', '12:47:00', 'Atmiya University', 'CS Department', 100, 0.00, 'event_6ac9ae903c9997.20111975.jpg', 1, '2026-10-10 09:48:00', 'published', '2026-10-10 03:18:40', '2026-10-10 03:18:40'),
+(5, 'AI Technology Seminar', 'Discover AI tools, machine learning and real-world applications.', '2026-10-10', '10:50:00', '13:51:00', 'Atmiya University', 'IT Department', 100, 50.00, 'event_6ac9af53ddf5b4.79997194.jpg', 1, '2026-10-10 09:51:00', 'published', '2026-10-10 03:21:55', '2026-10-10 03:21:55');
 
 -- --------------------------------------------------------
 
@@ -99,7 +103,11 @@ CREATE TABLE `registrations` (
 INSERT INTO `registrations` (`id`, `student_id`, `event_id`, `registration_code`, `qr_code`, `registered_at`, `payment_status`) VALUES
 (20, 34, 2, 'EVT-2026-19D00764', NULL, '2026-10-09 14:16:20', 'pending'),
 (21, 34, 1, 'EVT-2026-E81D26D6', 'EVT-2026-E81D26D6.png', '2026-10-09 14:17:14', 'not_required'),
-(22, 36, 1, 'EVT-2026-D5705268', 'EVT-2026-D5705268.png', '2026-10-09 14:24:34', 'not_required');
+(22, 36, 1, 'EVT-2026-D5705268', 'EVT-2026-D5705268.png', '2026-10-09 14:24:34', 'not_required'),
+(23, 38, 4, 'EVT-2026-0D597023', NULL, '2026-10-10 03:33:50', 'not_required'),
+(24, 40, 4, 'EVT-2026-F29C1B22', NULL, '2026-10-10 03:34:59', 'not_required'),
+(25, 42, 4, 'EVT-2026-F44C8587', 'EVT-2026-F44C8587.png', '2026-10-10 03:46:47', 'not_required'),
+(26, 44, 4, 'EVT-2026-8715F0FE', 'EVT-2026-8715F0FE.png', '2026-10-10 03:53:11', 'not_required');
 
 -- --------------------------------------------------------
 
@@ -145,7 +153,11 @@ INSERT INTO `students` (`id`, `name`, `department`, `program`, `semester`, `enro
 (19, 'komal', 'Computer Science', 'M.Sc. Computer Science', 'Semester 2', '2308017099', '8320604925', '8320604925', '2026-10-08 13:40:19'),
 (20, 'Komal', 'Industrial Chemistry', 'B.Sc. Industrial Chemistry', 'Semester 4', '1240142000', '8320604925', '9898744122', '2026-10-09 12:36:04'),
 (34, 'abc', 'Microbiology', 'B.Sc. Microbiology', 'Semester 7', '101', '8320604925', '9898744122', '2026-10-09 14:16:20'),
-(36, 'dev zala', 'Mathematics', 'B.Sc. Mathematics', 'Semester 4', '102', '8320604925', '9898744122', '2026-10-09 14:24:34');
+(36, 'dev zala', 'Mathematics', 'B.Sc. Mathematics', 'Semester 4', '102', '8320604925', '9898744122', '2026-10-09 14:24:34'),
+(38, 'vegad hasti', 'Computer Science', 'M.Sc. Computer Science', 'Semester 1', '15618226103', '6354663132', '6354663132', '2026-10-10 03:33:50'),
+(40, 'vegad hasti', 'Computer Science', 'M.Sc. Computer Science', 'Semester 1', '108', '6354663132', '6354663132', '2026-10-10 03:34:59'),
+(42, 'dfx', 'Mathematics', 'M.Sc. Mathematics', 'Semester 1', '121', '6354663132', '6354663132', '2026-10-10 03:46:47'),
+(44, 'vegad dharmi', 'Computer Application', 'MCA', 'Semester 1', '15618226104', '9924969644', '9924969644', '2026-10-10 03:53:11');
 
 -- --------------------------------------------------------
 
@@ -153,16 +165,15 @@ INSERT INTO `students` (`id`, `name`, `department`, `program`, `semester`, `enro
 -- Table structure for table `users`
 --
 
-CREATE TABLE `users` (
-  `id` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `email` varchar(100) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  `status` varchar(20) DEFAULT 'active',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    enroll_no VARCHAR(50) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 -- Indexes for dumped tables
 --
 
@@ -211,25 +222,25 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `attendance`
 --
 ALTER TABLE `attendance`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `events`
 --
 ALTER TABLE `events`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `registrations`
 --
 ALTER TABLE `registrations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT for table `students`
 --
 ALTER TABLE `students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT for table `users`
