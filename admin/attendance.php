@@ -2,17 +2,20 @@
 <?php
 // admin/attendance.php
 session_start();
+
 require_once __DIR__ . '/../config/database.php';
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn->set_charset('utf8mb4');
 
 $selectedEventId = filter_input(INPUT_GET, 'event_id', FILTER_VALIDATE_INT);
+
 if (!$selectedEventId || $selectedEventId < 1) {
     $selectedEventId = 0;
 }
 
 $events = [];
+
 $eventResult = $conn->query(
     "SELECT id, title, event_date
      FROM events
@@ -50,6 +53,7 @@ if ($selectedEventId > 0) {
 
     $stmt->bind_param('i', $selectedEventId);
     $stmt->execute();
+
     $result = $stmt->get_result();
 
     while ($row = $result->fetch_assoc()) {
@@ -67,7 +71,11 @@ if ($selectedEventId > 0) {
 }
 
 function e($value) {
-    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars(
+        (string) ($value ?? ''),
+        ENT_QUOTES,
+        'UTF-8'
+    );
 }
 ?>
 <!DOCTYPE html>
@@ -75,105 +83,483 @@ function e($value) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EventEase Attendance Dashboard</title>
+
+    <title>EventEase | Attendance Dashboard</title>
 
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            padding: 24px;
-            font-family: Arial, sans-serif;
-            background: #f3f5f9;
-            color: #1f2937;
+            min-height: 100vh;
+            padding: 30px 20px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1e293b;
+
+            background:
+                radial-gradient(
+                    circle at top left,
+                    #dbeafe 0,
+                    transparent 36%
+                ),
+                radial-gradient(
+                    circle at bottom right,
+                    #ede9fe 0,
+                    transparent 36%
+                ),
+                linear-gradient(
+                    135deg,
+                    #f8fafc,
+                    #eff6ff,
+                    #f5f3ff
+                );
         }
-        .container { max-width: 1200px; margin: auto; }
+
+        .background-decoration {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: -1;
+            filter: blur(2px);
+        }
+
+        .circle-one {
+            width: 280px;
+            height: 280px;
+            top: 80px;
+            right: -100px;
+            background: rgba(99, 102, 241, 0.10);
+        }
+
+        .circle-two {
+            width: 220px;
+            height: 220px;
+            bottom: 20px;
+            left: -80px;
+            background: rgba(59, 130, 246, 0.10);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1250px;
+            margin: 0 auto;
+            position: relative;
+        }
+
         .card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 22px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 18px rgba(0,0,0,.06);
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 18px;
+            padding: 26px;
+            margin-bottom: 22px;
+
+            box-shadow: 0 8px 30px rgba(30, 41, 59, 0.07);
+            backdrop-filter: blur(12px);
         }
-        h1 { margin-top: 0; }
-        label { display: block; font-weight: bold; margin-bottom: 8px; }
-        select, input, button {
-            padding: 11px;
-            border: 1px solid #d1d5db;
-            border-radius: 7px;
+
+        .header-card {
+            border-top: 4px solid #6366f1;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            color: #1e293b;
+            font-size: 30px;
+            font-weight: 750;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            margin: 0 0 22px;
+            color: #334155;
+            font-size: 23px;
+        }
+
+        p {
+            line-height: 1.6;
+        }
+
+        .muted {
+            color: #64748b;
+        }
+
+        .header-description {
+            margin: 0 0 20px;
+            font-size: 15px;
+        }
+
+        .links {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .links a {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 15px;
+            border-radius: 9px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: 0.2s ease;
+        }
+
+        .links a:hover {
+            background: #e0e7ff;
+            transform: translateY(-1px);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 9px;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        select,
+        input,
+        button {
+            font-family: inherit;
             font-size: 14px;
         }
-        select { width: 100%; }
-        button {
-            background: #2563eb;
-            color: white;
-            border: 0;
-            cursor: pointer;
-            font-weight: bold;
+
+        select,
+        input[type="search"] {
+            width: 100%;
+            min-height: 46px;
+            padding: 12px 14px;
+            color: #1e293b;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
+
+        select:focus,
+        input[type="search"]:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.13);
+        }
+
+        button {
+            min-height: 46px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.18);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+        }
+
         .filter-form {
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto;
-            gap: 12px;
+            gap: 16px;
             align-items: end;
         }
+
         .stats {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 14px;
+            gap: 18px;
+            margin-bottom: 25px;
         }
+
         .stat {
-            padding: 18px;
-            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            padding: 22px;
+            border-radius: 14px;
             background: #f8fafc;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e2e8f0;
         }
-        .stat strong { display: block; font-size: 27px; margin-top: 7px; }
-        .table-wrap { overflow-x: auto; }
+
+        .stat::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: #6366f1;
+        }
+
+        .stat:nth-child(2)::before {
+            background: #16a34a;
+        }
+
+        .stat:nth-child(3)::before {
+            background: #ef4444;
+        }
+
+        .stat-label {
+            display: block;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .stat strong {
+            display: block;
+            margin-top: 10px;
+            color: #1e293b;
+            font-size: 32px;
+            line-height: 1.2;
+        }
+
+        .search {
+            margin: 0 0 14px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+        }
+
         table {
             width: 100%;
+            min-width: 950px;
             border-collapse: collapse;
-            min-width: 900px;
         }
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
+
+        th,
+        td {
+            padding: 15px 14px;
+            border-bottom: 1px solid #e8edf4;
             text-align: left;
-            font-size: 14px;
+            font-size: 13px;
+            white-space: nowrap;
         }
-        th { background: #f8fafc; }
+
+        th {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.35px;
+        }
+
+        tbody tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: #f8faff;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
         .badge {
             display: inline-block;
+            padding: 6px 11px;
             border-radius: 20px;
-            padding: 5px 10px;
-            font-weight: bold;
             font-size: 12px;
+            font-weight: 700;
         }
-        .present { background: #dcfce7; color: #166534; }
-        .absent { background: #fee2e2; color: #991b1b; }
-        .muted { color: #6b7280; }
-        .links { display: flex; gap: 16px; flex-wrap: wrap; }
-        a { color: #2563eb; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .search { width: 100%; margin: 16px 0; }
-        .empty { padding: 24px; text-align: center; color: #6b7280; }
-        @media (max-width: 600px) {
-            body { padding: 12px; }
-            .stats { grid-template-columns: 1fr; }
-            .filter-form { grid-template-columns: 1fr; }
+
+        .present {
+            background: #dcfce7;
+            color: #166534;
         }
+
+        .absent {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .empty {
+            padding: 28px;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .table-actions .search {
+            flex: 1;
+            min-width: 220px;
+            margin: 0;
+        }
+
+        .print-button {
+            background: linear-gradient(135deg, #334155, #475569);
+            box-shadow: 0 4px 12px rgba(51, 65, 85, 0.15);
+        }
+
+        .print-button:hover {
+            box-shadow: 0 6px 16px rgba(51, 65, 85, 0.22);
+        }
+
+        @media (max-width: 700px) {
+            body {
+                padding: 16px 10px;
+            }
+
+            .card {
+                padding: 19px;
+                border-radius: 14px;
+            }
+
+            h1 {
+                font-size: 25px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+
+            .filter-form {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-form button {
+                width: 100%;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .stat {
+                padding: 18px;
+            }
+
+            .stat strong {
+                font-size: 28px;
+            }
+
+            .table-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .table-actions .search {
+                min-width: 0;
+            }
+
+            .print-button {
+                width: 100%;
+            }
+        }
+
         @media print {
-            body { background: white; padding: 0; }
-            .no-print, .filter-form, .search, .links { display: none !important; }
-            .card { box-shadow: none; border: 1px solid #ddd; }
+            body {
+                background: #fff;
+                padding: 0;
+                color: #000;
+            }
+
+            .background-decoration,
+            .no-print,
+            .filter-form,
+            .search,
+            .links,
+            button {
+                display: none !important;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            .card {
+                padding: 12px;
+                margin-bottom: 12px;
+                border: 1px solid #ddd;
+                border-radius: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            h1 {
+                font-size: 23px;
+            }
+
+            h2 {
+                font-size: 18px;
+            }
+
+            .stats {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .stat {
+                padding: 12px;
+                background: #fff;
+            }
+
+            .table-wrap {
+                overflow: visible;
+                border: none;
+            }
+
+            table {
+                min-width: 0;
+                width: 100%;
+            }
+
+            th,
+            td {
+                padding: 7px 5px;
+                font-size: 10px;
+                white-space: normal;
+            }
+
+            th {
+                background: #eee !important;
+                print-color-adjust: exact;
+            }
+
+            .badge {
+                padding: 3px 5px;
+            }
         }
     </style>
 </head>
+
 <body>
+
+<div class="background-decoration circle-one"></div>
+<div class="background-decoration circle-two"></div>
+
 <div class="container">
 
-    <div class="card">
+    <!-- Header -->
+    <div class="card header-card">
         <h1>Attendance Dashboard</h1>
-        <p class="muted">View event registrations and check-in status.</p>
+
+        <p class="muted header-description">
+            View event registrations, monitor attendance, and check student check-in status.
+        </p>
 
         <div class="links no-print">
             <a href="scan_attendance.php">← Open QR Scanner</a>
@@ -181,56 +567,86 @@ function e($value) {
         </div>
     </div>
 
+    <!-- Event Selection -->
     <div class="card no-print">
         <form method="GET" action="attendance.php" class="filter-form">
+
             <div>
                 <label for="event_id">Select Event</label>
+
                 <select name="event_id" id="event_id" required>
                     <option value="">-- Choose an event --</option>
+
                     <?php foreach ($events as $event): ?>
                         <option
                             value="<?= (int) $event['id'] ?>"
                             <?= $selectedEventId === (int) $event['id'] ? 'selected' : '' ?>>
-                            <?= e($event['title']) ?> (<?= e($event['event_date']) ?>)
+
+                            <?= e($event['title']) ?>
+                            (<?= e($event['event_date']) ?>)
+
                         </option>
                     <?php endforeach; ?>
+
                 </select>
             </div>
+
             <button type="submit">View Attendance</button>
         </form>
     </div>
 
     <?php if ($selectedEventId > 0): ?>
+
+        <!-- Attendance Summary -->
         <div class="card">
-            <h2><?= e($attendanceRows[0]['event_title'] ?? 'Selected Event') ?></h2>
+
+            <h2>
+                <?= e($attendanceRows[0]['event_title'] ?? 'Selected Event') ?>
+            </h2>
 
             <div class="stats">
+
                 <div class="stat">
-                    Total Registrations
+                    <span class="stat-label">Total Registrations</span>
                     <strong><?= $totalRegistrations ?></strong>
                 </div>
+
                 <div class="stat">
-                    Present
+                    <span class="stat-label">Present</span>
                     <strong><?= $totalPresent ?></strong>
                 </div>
+
                 <div class="stat">
-                    Absent
+                    <span class="stat-label">Absent</span>
                     <strong><?= $totalAbsent ?></strong>
                 </div>
+
             </div>
 
-            <div class="no-print">
+            <!-- Search and Print -->
+            <div class="table-actions no-print">
+
                 <input
                     type="search"
                     id="studentSearch"
                     class="search"
-                    placeholder="Search by student name or enrollment number...">
+                    placeholder="Search student name or enrollment number...">
 
-                <button type="button" onclick="window.print()">Print Attendance</button>
+                <button
+                    type="button"
+                    class="print-button"
+                    onclick="window.print()">
+
+                    Print Attendance
+                </button>
+
             </div>
 
-            <div class="table-wrap" style="margin-top:18px">
+            <!-- Attendance Table -->
+            <div class="table-wrap">
+
                 <table id="attendanceTable">
+
                     <thead>
                         <tr>
                             <th>#</th>
@@ -243,46 +659,84 @@ function e($value) {
                             <th>Check-in Time</th>
                         </tr>
                     </thead>
+
                     <tbody>
+
                     <?php if (count($attendanceRows) > 0): ?>
+
                         <?php foreach ($attendanceRows as $index => $row): ?>
-                            <?php $isPresent = !empty($row['attendance_status']); ?>
+
+                            <?php
+                            $isPresent = !empty($row['attendance_status']);
+                            ?>
+
                             <tr>
                                 <td><?= $index + 1 ?></td>
+
                                 <td><?= e($row['student_name']) ?></td>
+
                                 <td><?= e($row['enrollment_number']) ?></td>
+
                                 <td><?= e($row['department']) ?></td>
+
                                 <td><?= e($row['program']) ?></td>
+
                                 <td><?= e($row['semester']) ?></td>
+
                                 <td>
                                     <?php if ($isPresent): ?>
-                                        <span class="badge present">Present</span>
+
+                                        <span class="badge present">
+                                            Present
+                                        </span>
+
                                     <?php else: ?>
-                                        <span class="badge absent">Absent</span>
+
+                                        <span class="badge absent">
+                                            Absent
+                                        </span>
+
                                     <?php endif; ?>
                                 </td>
+
                                 <td>
-                                    <?= $isPresent && $row['check_in_time']
-                                        ? e($row['check_in_time'])
-                                        : '—' ?>
+                                    <?php
+                                    if ($isPresent && !empty($row['check_in_time'])) {
+                                        echo e($row['check_in_time']);
+                                    } else {
+                                        echo '—';
+                                    }
+                                    ?>
                                 </td>
                             </tr>
+
                         <?php endforeach; ?>
+
                     <?php else: ?>
+
                         <tr>
                             <td colspan="8" class="empty">
                                 No registrations found for this event.
                             </td>
                         </tr>
+
                     <?php endif; ?>
+
                     </tbody>
+
                 </table>
+
             </div>
         </div>
+
     <?php else: ?>
+
         <div class="card">
-            <p class="empty">Choose an event above to view its attendance.</p>
+            <p class="empty">
+                Choose an event above to view its attendance.
+            </p>
         </div>
+
     <?php endif; ?>
 
 </div>
@@ -293,7 +747,10 @@ const searchInput = document.getElementById('studentSearch');
 if (searchInput) {
     searchInput.addEventListener('input', function () {
         const query = this.value.toLowerCase().trim();
-        const rows = document.querySelectorAll('#attendanceTable tbody tr');
+
+        const rows = document.querySelectorAll(
+            '#attendanceTable tbody tr'
+        );
 
         rows.forEach(function (row) {
             row.style.display = row.innerText.toLowerCase().includes(query)
@@ -303,5 +760,6 @@ if (searchInput) {
     });
 }
 </script>
+
 </body>
 </html>
